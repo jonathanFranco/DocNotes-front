@@ -18,7 +18,6 @@ export interface DocumentInfo {
   filename: string
   page_count: number
   pages_with_text: number
-  chunk_count: number
 }
 
 export interface UploadResponse {
@@ -27,16 +26,20 @@ export interface UploadResponse {
   processing_seconds: number
 }
 
-export interface Source {
-  page: number
-  excerpt: string
-  similarity: number
+type ErrorParams = Record<string, string | number>
+
+export interface SummaryPoint {
+  text: string
+  verified: boolean | null
+  evidence: { page: number; excerpt: string } | null
 }
 
-export interface ChatResponse {
-  answer: string
-  found: boolean
-  sources: Source[]
+export interface SummaryResponse {
+  status: 'generating' | 'ready' | 'failed'
+  stage: 'reading' | 'writing' | 'checking' | null
+  progress: { done: number; total: number } | null
+  points: SummaryPoint[]
+  error: { code: string; params: ErrorParams } | null
 }
 
 export class ApiError extends Error {
@@ -50,10 +53,10 @@ export class ApiError extends Error {
 
 interface ErrorBody {
   code?: string
-  params?: Record<string, string | number>
+  params?: ErrorParams
 }
 
-const ERROR_MESSAGES: Record<string, (params: Record<string, string | number>) => string> = {
+const ERROR_MESSAGES: Record<string, (params: ErrorParams) => string> = {
   FILE_NOT_PDF: () => 'Envie um arquivo com extensão .pdf.',
   FILE_EMPTY: () => 'O arquivo está vazio.',
   FILE_TOO_LARGE: (p) => `O arquivo excede o limite de ${p.max_mb} MB.`,
@@ -62,9 +65,9 @@ const ERROR_MESSAGES: Record<string, (params: Record<string, string | number>) =
   PDF_PASSWORD_PROTECTED: () => 'PDF protegido por senha não é suportado.',
   PDF_NO_PAGES: () => 'O PDF não contém páginas.',
   PDF_NO_TEXT: () => 'Nenhum texto extraível encontrado. PDFs digitalizados (apenas imagem) não são suportados.',
-  QUESTION_EMPTY: () => 'A pergunta não pode estar vazia.',
-  QUESTION_TOO_LONG: (p) => `A pergunta deve ter no máximo ${p.max_chars} caracteres.`,
-  NO_DOCUMENT: () => 'Nenhum documento carregado. Envie um PDF antes de perguntar.',
+  NO_DOCUMENT: () => 'Nenhum documento carregado. Envie um PDF primeiro.',
+  SUMMARY_EMPTY: () => 'O modelo não conseguiu resumir este documento. Tente novamente.',
+  SUMMARY_FAILED: () => 'Algo deu errado ao gerar o resumo. Tente novamente.',
   OLLAMA_UNAVAILABLE: () => 'O Ollama não está respondendo. Verifique se ele está rodando e tente novamente.',
   OLLAMA_MODEL_ERROR: (p) => `O Ollama não conseguiu usar o modelo "${p.model}". Verifique se ele está instalado.`,
 }
@@ -87,9 +90,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
-function errorMessage(status: number, code: string | null, params: Record<string, string | number>): string {
-  const message = code ? ERROR_MESSAGES[code] : undefined
-  if (message) return message(params)
+export function errorText(error: unknown): string {
+  return error instanceof ApiError ? error.message : 'Algo deu errado. Tente novamente.'
+}
+
+export function describeError(code: string, params: ErrorParams = {}): string {
+  return ERROR_MESSAGES[code]?.(params) ?? 'Algo deu errado. Tente novamente.'
+}
+
+function errorMessage(status: number, code: string | null, params: ErrorParams): string {
+  if (code && ERROR_MESSAGES[code]) return describeError(code, params)
   if (status === 502 || status === 504) return 'O servidor não respondeu. Verifique se o backend está rodando.'
   return `Erro inesperado no servidor (${status}).`
 }
@@ -117,10 +127,10 @@ export function deleteDocument(): Promise<{ message: string }> {
   return request<{ message: string }>('/documents', { method: 'DELETE' })
 }
 
-export function askQuestion(question: string): Promise<ChatResponse> {
-  return request<ChatResponse>('/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-  })
+export function getSummary(): Promise<SummaryResponse> {
+  return request<SummaryResponse>('/documents/summary')
+}
+
+export function retrySummary(): Promise<SummaryResponse> {
+  return request<SummaryResponse>('/documents/summary', { method: 'POST' })
 }

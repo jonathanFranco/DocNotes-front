@@ -4,7 +4,6 @@ interface DialogProps {
   open: boolean
   title: string
   children: ReactNode
-  /** With onConfirm: confirm/cancel dialog. Without: informational dialog with a single close button. */
   onConfirm?: () => void
   onClose: () => void
   confirmLabel?: string

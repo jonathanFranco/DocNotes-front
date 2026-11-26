@@ -1,6 +1,6 @@
 # DocNotes — Frontend
 
-Interface web do **DocNotes**: envie um PDF e converse com uma IA sobre o conteúdo dele. Cada resposta mostra as páginas de origem e grifa os trechos do documento que foram usados. Tudo roda localmente.
+Interface web do **DocNotes**: envie um PDF e receba um resumo ponto a ponto, na ordem do documento, com a página de cada informação. O resumo começa sozinho e aparece aos poucos, enquanto a IA escreve. Tudo roda localmente.
 
 Este repositório é só a interface. Ela precisa do **backend** do DocNotes (API FastAPI + Ollama) rodando, que fica em outro repositório do projeto.
 
@@ -36,7 +36,7 @@ docker compose up --build
 O navegador chama sempre `/api/*` e o Vite repassa a chamada para o backend, removendo o `/api`. Como tudo sai da mesma origem, o backend não precisa de CORS.
 
 ```
-navegador → localhost:5173/api/chat → (proxy do Vite) → backend:8000/chat
+navegador → localhost:5173/api/documents/summary → (proxy do Vite) → backend:8000/documents/summary
 ```
 
 No Docker, o destino padrão é `http://host.docker.internal:8000`, a porta 8000 publicada na sua máquina. Funciona com o backend rodando em Docker ou direto na máquina. No segundo caso, o uvicorn precisa estar com `--host 0.0.0.0`. Para apontar para outro endereço:
@@ -72,27 +72,31 @@ Acesse http://localhost:5173. Se o backend estiver em outro endereço, crie um `
 ## Usando
 
 1. Arraste um PDF para a área de upload ou clique em **Escolher arquivo** (até 20 MB).
-2. Aguarde o processamento. PDFs grandes podem levar alguns minutos.
-3. Faça perguntas. Cada resposta traz as páginas de origem (`p. N`) e os trechos usados, grifados.
-4. Para trocar de documento, clique em **Remover documento** e envie outro.
+2. O resumo começa sozinho. Primeiro aparece o progresso da leitura ("Parte 1 de 3"); depois, os pontos surgem um a um enquanto a IA escreve. Um PDF de poucas páginas leva cerca de 20 segundos; documentos longos, alguns minutos.
+3. Depois de escrito, cada ponto é conferido no próprio PDF. Clique em **Trecho de origem** para ver o texto original grifado. Pontos que o documento não confirma aparecem marcados como **Não confirmado no documento**, com o trecho mais próximo ao lado.
+4. Para trocar de documento, clique no ícone de lixeira e envie outro.
 
-O documento fica salvo no backend: recarregar a página não o apaga. Só a conversa recomeça.
+O documento e o resumo ficam salvos no backend: recarregar a página mostra o resumo pronto na hora, ou retoma o acompanhamento se ele ainda estiver sendo gerado.
 
-Se o Ollama estiver fora do ar ou faltar algum modelo, aparece um aviso no topo da tela explicando o que fazer. Se o backend não responder, a tela mostra o erro e um botão para tentar de novo.
+Se o Ollama estiver fora do ar ou faltar algum modelo, aparece um aviso no topo da tela explicando o que fazer. Se o resumo falhar, a tela mostra o motivo e um botão **Tentar novamente**.
+
+### Como a tela acompanha o resumo
+
+O backend gera o resumo em segundo plano. O componente `Summary` consulta `GET /api/documents/summary` a cada segundo enquanto `status` for `generating` e para quando o resumo fica pronto ou falha. Cada `(p. N)` no texto de um ponto vira uma etiqueta de página, e o campo `verified` de cada ponto define o selo e o trecho de origem.
 
 ## Estrutura
 
 ```
 src/
   main.tsx                  ponto de entrada
-  App.tsx                   telas: carregando, upload, processamento e chat
+  App.tsx                   telas: carregando, upload, envio e documento
   index.css                 tema (cores, fontes) e estilos globais do Tailwind
   services/
     api.ts                  cliente tipado da API; traduz o `code` dos erros para PT-BR
   components/
     FileUpload.tsx          área de arrastar/escolher o PDF
-    ChatMessage.tsx         mensagem do usuário, da IA ou de erro
-    SourceReference.tsx     trecho do documento citado como fonte
+    Summary.tsx             acompanha o resumo (polling) e mostra progresso, pontos, verificação e erros
+    Dialog.tsx              diálogo de confirmação
 vite.config.ts              plugins e proxy /api → backend
 Dockerfile                  imagem de desenvolvimento (Vite)
 docker-compose.yml          sobe o frontend apontando para o backend
