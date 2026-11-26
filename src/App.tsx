@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ChatMessage, type Message } from './components/ChatMessage'
+import { Dialog } from './components/Dialog'
 import { FileUpload } from './components/FileUpload'
 import {
   ApiError,
@@ -16,6 +17,8 @@ const MAX_QUESTION_CHARS = 1000
 const NOT_FOUND_MESSAGE = 'Não encontrei essa informação no documento.'
 
 type NewMessage = Message extends infer M ? (M extends Message ? Omit<M, 'id'> : never) : never
+
+type DialogState = { kind: 'confirm-remove' } | { kind: 'remove-error'; message: string } | null
 
 type Phase =
   | { kind: 'loading' }
@@ -40,6 +43,7 @@ export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [fatal, setFatal] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [dialog, setDialog] = useState<DialogState>(null)
 
   useEffect(() => {
     Promise.all([getHealth(), getCurrentDocument()])
@@ -62,13 +66,17 @@ export default function App() {
     }
   }
 
-  async function handleRemove() {
-    if (!window.confirm('Remover o documento atual? A conversa também será apagada.')) return
+  function closeDialog(kind: NonNullable<DialogState>['kind']) {
+    setDialog((current) => (current?.kind === kind ? null : current))
+  }
+
+  async function removeDocument() {
+    setDialog(null)
     try {
       await deleteDocument()
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 404)) {
-        window.alert(errorText(error))
+        setDialog({ kind: 'remove-error', message: errorText(error) })
         return
       }
     }
@@ -80,38 +88,41 @@ export default function App() {
   return (
     <div className="flex min-h-dvh flex-col">
       {warning && (
-        <p role="status" className="border-b border-marker bg-marker/40 px-4 py-2 text-center text-sm text-ink">
+        <p role="status" className="border-b border-marker/20 bg-marker/10 px-4 py-2.5 text-center text-sm text-marker">
           {warning}
         </p>
       )}
       {fatal ? (
         <Centered>
           <Wordmark />
-          <p role="alert" className="mt-6 text-danger">
+          <p role="alert" className="mt-6 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {fatal}
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-4 rounded-md border border-rule bg-sheet px-4 py-2 text-sm hover:border-graphite"
+            className="mt-4 rounded-xl border border-rule bg-sheet px-4 py-2 text-sm transition-colors hover:border-graphite/50 hover:bg-raised"
           >
             Tentar novamente
           </button>
         </Centered>
       ) : phase.kind === 'loading' ? (
         <Centered>
-          <p className="text-graphite">Carregando…</p>
+          <Dots label="Carregando" />
         </Centered>
       ) : phase.kind === 'ready' ? (
-        <Chat key={phase.document.document_id} document={phase.document} onRemove={handleRemove} />
+        <Chat key={phase.document.document_id} document={phase.document} onRemove={() => setDialog({ kind: 'confirm-remove' })} />
       ) : (
         <Centered>
           <Wordmark />
-          <p className="mt-4 max-w-[52ch] text-lg leading-relaxed text-graphite">
+          <h1 className="mt-8 text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+            Converse com seus PDFs.
+          </h1>
+          <p className="mt-3 max-w-[52ch] leading-relaxed text-graphite">
             Envie um PDF e faça perguntas sobre ele. As respostas saem do próprio documento, com a página de cada
             informação. Tudo roda no seu computador.
           </p>
-          <div className="mt-10">
+          <div className="mt-8 sm:mt-10">
             {phase.kind === 'uploading' ? (
               <Processing filename={phase.filename} />
             ) : (
@@ -120,28 +131,72 @@ export default function App() {
           </div>
         </Centered>
       )}
+      <Dialog
+        open={dialog?.kind === 'confirm-remove'}
+        title="Remover documento?"
+        tone="danger"
+        confirmLabel="Remover"
+        onConfirm={removeDocument}
+        onClose={() => closeDialog('confirm-remove')}
+      >
+        O documento atual e toda a conversa serão apagados.
+      </Dialog>
+      <Dialog
+        open={dialog?.kind === 'remove-error'}
+        title="Não foi possível remover"
+        onClose={() => closeDialog('remove-error')}
+      >
+        {dialog?.kind === 'remove-error' && dialog.message}
+      </Dialog>
     </div>
   )
 }
 
-function Wordmark() {
-  return <h1 className="font-serif text-5xl font-semibold tracking-tight text-ink sm:text-6xl">DocNotes</h1>
+function Wordmark({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-semibold tracking-tight text-ink">
+      <span aria-hidden="true" className="grid size-7 place-items-center rounded-lg bg-pen text-paper">
+        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.25">
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3v5h5M9 13h6M9 17h4" />
+        </svg>
+      </span>
+      <span className={compact ? 'hidden sm:inline' : ''}>DocNotes</span>
+    </span>
+  )
 }
 
 function Centered({ children }: { children: ReactNode }) {
-  return <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-16 sm:py-24">{children}</main>
+  return <main className="mx-auto w-full max-w-xl flex-1 px-4 py-12 sm:py-24">{children}</main>
+}
+
+function Dots({ label }: { label: string }) {
+  return (
+    <p role="status" className="flex items-center gap-2 text-sm text-graphite">
+      <span className="flex gap-1" aria-hidden="true">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="size-1.5 rounded-full bg-pen [animation:pulse-dot_1.2s_ease-in-out_infinite]"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          />
+        ))}
+      </span>
+      {label}…
+    </p>
+  )
 }
 
 function Processing({ filename }: { filename: string }) {
   return (
-    <div role="status" aria-live="polite" className="sheet relative flex min-h-72 flex-col justify-end gap-4 border border-rule bg-sheet p-8">
+    <div role="status" aria-live="polite" className="flex flex-col gap-5 rounded-2xl border border-rule bg-sheet p-6 sm:p-8">
       <div>
-        <p className="font-serif text-2xl break-words text-ink">{filename}</p>
+        <p className="text-lg font-medium wrap-break-word text-ink">{filename}</p>
         <p className="mt-1 text-sm text-graphite">
           Lendo o texto e preparando o documento para perguntas. PDFs grandes podem levar alguns minutos.
         </p>
       </div>
-      <div className="h-1 overflow-hidden rounded-full bg-rule" aria-hidden="true">
+      <div className="h-1 overflow-hidden rounded-full bg-raised" aria-hidden="true">
         <div className="h-full w-2/5 rounded-full bg-pen [animation:reading_1.4s_ease-in-out_infinite]" />
       </div>
     </div>
@@ -192,78 +247,98 @@ function Chat({ document, onRemove }: { document: DocumentInfo; onRemove: () => 
 
   return (
     <>
-      <header className="sticky top-0 z-10 border-b border-rule bg-paper/95 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center gap-4 px-4 py-3">
-          <span className="hidden font-serif text-lg font-semibold whitespace-nowrap sm:inline">DocNotes</span>
-          <div className="min-w-0 flex-1 sm:border-l sm:border-rule sm:pl-4">
-            <p className="truncate text-sm font-medium" title={document.filename}>
+      <header className="sticky top-0 z-10 border-b border-rule/70 bg-paper/80 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3 sm:gap-4">
+          <Wordmark compact />
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-rule bg-sheet px-3 py-1.5">
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4 shrink-0 text-pen" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+              <path d="M14 3v5h5" />
+            </svg>
+            <p className="min-w-0 truncate text-sm font-medium" title={document.filename}>
               {document.filename}
             </p>
-            <p className="text-xs text-graphite">{pages}</p>
+            <span className="shrink-0 text-xs text-graphite">· {pages}</span>
           </div>
           <button
             type="button"
             onClick={onRemove}
             aria-label="Remover documento"
-            className="rounded-md border border-rule bg-sheet px-3 py-1.5 text-sm whitespace-nowrap text-ink hover:border-danger hover:text-danger"
+            title="Remover documento"
+            className="grid size-9 shrink-0 place-items-center rounded-xl border border-rule bg-sheet text-graphite transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
           >
-            Remover<span className="hidden sm:inline"> documento</span>
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" />
+            </svg>
           </button>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 sm:py-10">
         {messages.length === 0 && !asking ? (
-          <div className="max-w-prose pt-8">
-            <p className="font-serif text-2xl text-ink">O documento está pronto.</p>
-            <p className="mt-2 text-graphite">
+          <div className="mx-auto max-w-md pt-10 text-center sm:pt-20">
+            <span aria-hidden="true" className="mx-auto grid size-12 place-items-center rounded-2xl bg-pen-wash text-pen">
+              <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+              </svg>
+            </span>
+            <p className="mt-4 text-xl font-semibold tracking-tight">O documento está pronto.</p>
+            <p className="mt-2 text-sm leading-relaxed text-graphite">
               Pergunte o que quiser saber sobre ele. Se a resposta não estiver no texto, o DocNotes avisa em vez de
               inventar.
             </p>
           </div>
         ) : (
-          <div className="space-y-8" aria-live="polite">
+          <div className="space-y-6 sm:space-y-8" aria-live="polite">
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
-            {asking && <p className="font-serif text-lg text-graphite">Consultando o documento…</p>}
+            {asking && <Dots label="Consultando o documento" />}
           </div>
         )}
         <div ref={endRef} />
       </main>
 
-      <footer className="sticky bottom-0 border-t border-rule bg-paper/95 backdrop-blur">
-        <form onSubmit={submit} className="mx-auto flex max-w-3xl items-end gap-3 px-4 py-4">
-          <label htmlFor="question" className="sr-only">
-            Pergunta sobre o documento
-          </label>
-          <textarea
-            id="question"
-            ref={inputRef}
-            rows={1}
-            autoFocus
-            value={question}
-            maxLength={MAX_QUESTION_CHARS}
-            onChange={(event) => setQuestion(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault()
-                void submit()
-              }
-            }}
-            placeholder="Pergunte algo sobre o documento"
-            className="field-sizing-content max-h-40 min-h-11 flex-1 resize-none rounded-md border border-rule bg-sheet px-3 py-2.5 placeholder:text-graphite/70 focus:border-pen focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={asking || !question.trim()}
-            className="h-11 rounded-md bg-pen px-5 text-sm font-medium text-white hover:bg-pen-dark disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Perguntar
-          </button>
+      <footer className="sticky bottom-0 bg-gradient-to-t from-paper via-paper/95 to-transparent pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <form
+          onSubmit={submit}
+          className="mx-auto flex max-w-3xl items-end gap-2 px-4"
+        >
+          <div className="flex flex-1 items-end gap-2 rounded-2xl border border-rule bg-sheet p-1.5 shadow-lg shadow-black/40 transition-colors focus-within:border-pen/60">
+            <label htmlFor="question" className="sr-only">
+              Pergunta sobre o documento
+            </label>
+            <textarea
+              id="question"
+              ref={inputRef}
+              rows={1}
+              autoFocus
+              value={question}
+              maxLength={MAX_QUESTION_CHARS}
+              onChange={(event) => setQuestion(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault()
+                  void submit()
+                }
+              }}
+              placeholder="Pergunte algo sobre o documento"
+              className="field-sizing-content max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 text-base placeholder:text-graphite/70 focus:outline-none sm:text-sm"
+            />
+            <button
+              type="submit"
+              disabled={asking || !question.trim()}
+              aria-label="Perguntar"
+              className="grid size-10 shrink-0 place-items-center rounded-xl bg-pen text-paper transition-colors hover:bg-pen-dark disabled:cursor-not-allowed disabled:bg-raised disabled:text-graphite"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.25">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
         </form>
         {question.length > MAX_QUESTION_CHARS * 0.8 && (
-          <p className="mx-auto -mt-2 max-w-3xl px-4 pb-3 text-xs text-graphite">
+          <p className="mx-auto mt-2 max-w-3xl px-6 text-xs text-graphite">
             {question.length}/{MAX_QUESTION_CHARS} caracteres
           </p>
         )}

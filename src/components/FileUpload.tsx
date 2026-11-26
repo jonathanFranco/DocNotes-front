@@ -37,26 +37,28 @@ export function FileUpload({ onFile, error }: FileUploadProps) {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`sheet relative flex min-h-72 flex-col items-start justify-end gap-5 border bg-sheet p-8 transition-colors ${
-          dragging ? 'border-pen bg-pen-wash' : 'border-rule'
+        className={`flex flex-col items-center gap-5 rounded-2xl border border-dashed px-6 py-10 text-center transition-colors sm:py-14 ${
+          dragging ? 'border-pen bg-pen-wash' : 'border-rule bg-sheet/60 hover:border-graphite/50'
         }`}
       >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="mb-auto size-8 text-graphite" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-          <path d="M14 3v5h5M12 18v-6M9 15l3-3 3 3" />
-        </svg>
+        <span className="grid size-12 place-items-center rounded-xl bg-raised text-pen">
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.75">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+            <path d="M14 3v5h5M12 18v-6M9 15l3-3 3 3" />
+          </svg>
+        </span>
         <div>
-          <p className="font-serif text-2xl text-ink">
+          <p className="text-lg font-medium text-ink">
             {dragging ? 'Solte o arquivo para enviar' : 'Arraste um PDF para cá'}
           </p>
-          <p className="mt-1 text-sm text-graphite">
+          <p className="mx-auto mt-1 max-w-[42ch] text-sm text-graphite">
             Funciona com PDFs de texto selecionável. Documentos digitalizados como imagem não são lidos.
           </p>
         </div>
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="rounded-md bg-pen px-4 py-2 text-sm font-medium text-white hover:bg-pen-dark"
+          className="rounded-xl bg-pen px-5 py-2.5 text-sm font-medium text-paper transition-colors hover:bg-pen-dark"
         >
           Escolher arquivo
         </button>
@@ -74,7 +76,7 @@ export function FileUpload({ onFile, error }: FileUploadProps) {
         />
       </div>
       {message && (
-        <p role="alert" className="mt-3 text-sm text-danger">
+        <p role="alert" className="mt-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
           {message}
         </p>
       )}
