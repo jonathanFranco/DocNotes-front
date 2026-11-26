@@ -1,0 +1,58 @@
+@import "tailwindcss";
+@import "@fontsource-variable/source-serif-4";
+
+@theme {
+  --color-paper: #f6f7f9;
+  --color-sheet: #ffffff;
+  --color-ink: #1b2433;
+  --color-graphite: #5a6474;
+  --color-rule: #dde1e8;
+  --color-pen: #2e49c9;
+  --color-pen-dark: #2339a3;
+  --color-pen-wash: #e9edfb;
+  --color-marker: #ffe36e;
+  --color-danger: #b3261e;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink antialiased;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-pen;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes reading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.sheet {
+  --fold: 1.75rem;
+  clip-path: polygon(0 0, calc(100% - var(--fold)) 0, 100% var(--fold), 100% 100%, 0 100%);
+}
+.sheet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--fold);
+  height: var(--fold);
+  background: linear-gradient(225deg, transparent 50%, var(--color-rule) 50%);
+}
