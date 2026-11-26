@@ -8,7 +8,6 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      // O frontend chama /api/*; o Vite repassa ao FastAPI sem precisar de CORS.
       proxy: {
         '/api': {
           target: env.BACKEND_URL ?? 'http://localhost:8000',

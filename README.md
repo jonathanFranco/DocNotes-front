@@ -88,7 +88,7 @@ src/
   App.tsx                   telas: carregando, upload, processamento e chat
   index.css                 tema (cores, fontes) e estilos globais do Tailwind
   services/
-    api.ts                  cliente tipado da API e tratamento de erros
+    api.ts                  cliente tipado da API; traduz o `code` dos erros para PT-BR
   components/
     FileUpload.tsx          área de arrastar/escolher o PDF
     ChatMessage.tsx         mensagem do usuário, da IA ou de erro

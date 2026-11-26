@@ -48,6 +48,27 @@ export class ApiError extends Error {
   }
 }
 
+interface ErrorBody {
+  code?: string
+  params?: Record<string, string | number>
+}
+
+const ERROR_MESSAGES: Record<string, (params: Record<string, string | number>) => string> = {
+  FILE_NOT_PDF: () => 'Envie um arquivo com extensão .pdf.',
+  FILE_EMPTY: () => 'O arquivo está vazio.',
+  FILE_TOO_LARGE: (p) => `O arquivo excede o limite de ${p.max_mb} MB.`,
+  PDF_INVALID: () => 'O arquivo não é um PDF válido.',
+  PDF_CORRUPTED: () => 'Não foi possível abrir o PDF; o arquivo pode estar corrompido.',
+  PDF_PASSWORD_PROTECTED: () => 'PDF protegido por senha não é suportado.',
+  PDF_NO_PAGES: () => 'O PDF não contém páginas.',
+  PDF_NO_TEXT: () => 'Nenhum texto extraível encontrado. PDFs digitalizados (apenas imagem) não são suportados.',
+  QUESTION_EMPTY: () => 'A pergunta não pode estar vazia.',
+  QUESTION_TOO_LONG: (p) => `A pergunta deve ter no máximo ${p.max_chars} caracteres.`,
+  NO_DOCUMENT: () => 'Nenhum documento carregado. Envie um PDF antes de perguntar.',
+  OLLAMA_UNAVAILABLE: () => 'O Ollama não está respondendo. Verifique se ele está rodando e tente novamente.',
+  OLLAMA_MODEL_ERROR: (p) => `O Ollama não conseguiu usar o modelo "${p.model}". Verifique se ele está instalado.`,
+}
+
 const API_BASE = '/api'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -60,14 +81,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new ApiError(response.status, errorMessage(response.status, body))
+    const { code = null, params = {} } = (body ?? {}) as ErrorBody
+    throw new ApiError(response.status, errorMessage(response.status, code, params))
   }
   return body as T
 }
 
-function errorMessage(status: number, body: unknown): string {
-  const detail = (body as { detail?: unknown } | null)?.detail
-  if (typeof detail === 'string') return detail
+function errorMessage(status: number, code: string | null, params: Record<string, string | number>): string {
+  const message = code ? ERROR_MESSAGES[code] : undefined
+  if (message) return message(params)
   if (status === 502 || status === 504) return 'O servidor não respondeu. Verifique se o backend está rodando.'
   return `Erro inesperado no servidor (${status}).`
 }

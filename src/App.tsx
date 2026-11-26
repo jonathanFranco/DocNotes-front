@@ -13,6 +13,7 @@ import {
 } from './services/api'
 
 const MAX_QUESTION_CHARS = 1000
+const NOT_FOUND_MESSAGE = 'Não encontrei essa informação no documento.'
 
 type NewMessage = Message extends infer M ? (M extends Message ? Omit<M, 'id'> : never) : never
 
@@ -173,7 +174,12 @@ function Chat({ document, onRemove }: { document: DocumentInfo; onRemove: () => 
     setAsking(true)
     try {
       const response = await askQuestion(text)
-      push({ role: 'assistant', text: response.answer, found: response.found, sources: response.sources })
+      push({
+        role: 'assistant',
+        text: response.found ? response.answer : NOT_FOUND_MESSAGE,
+        found: response.found,
+        sources: response.sources,
+      })
     } catch (error) {
       push({ role: 'error', text: errorText(error) })
     } finally {
